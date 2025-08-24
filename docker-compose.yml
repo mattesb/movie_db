@@ -1,0 +1,44 @@
+# docker-compose.yml
+version: "3.8"
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-moviedb}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - movie_net
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-moviedb}
+      OMDB_API_KEY: ${OMDB_API_KEY:-3e2ed480}
+    ports:
+      - "5001:5000"
+    networks:
+      - movie_net
+  frontend:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npx serve -s build -l 3001"
+    ports:
+      - "3001:3001"
+    networks:
+      - movie_net
+    environment:
+      # Remove hardcoded IP - let frontend determine API URL dynamically
+      - NODE_ENV=production
+networks:
+  movie_net:
+    driver: bridge
+volumes:
+  db_data:
