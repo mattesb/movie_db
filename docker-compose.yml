@@ -19,7 +19,8 @@ services:
       - db
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-moviedb}
-      OMDB_API_KEY: ${OMDB_API_KEY:-3e2ed480}
+      OMDB_API_KEY: ${OMDB_API_KEY}
+      TMDB_API_KEY: ${TMDB_API_KEY}
     ports:
       - "5001:5000"
     networks:

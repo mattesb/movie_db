@@ -161,28 +161,33 @@ The application uses the following environment variables:
 ### Backend
 - `DATABASE_URL` - PostgreSQL connection string (auto-generated from above)
 - `OMDB_API_KEY` - API key for OMDB (get from http://www.omdbapi.com/apikey.aspx)
+- `TMDB_API_KEY` - **NEW!** API key for The Movie Database (get from https://www.themoviedb.org/settings/api)
 
 ### Frontend
 - `REACT_APP_API_URL` - Backend API URL (default: http://localhost:5001)
 
 ## Features Overview
 
-### Movie Search
-- Search movies by title using OMDB API
-- Automatic addition to your collection
-- Rich movie metadata retrieval
+### Enhanced Movie Search 🆕
+- **Dual API Integration**: Uses both TMDB and OMDB for comprehensive movie data
+- **Rich Metadata**: High-quality posters, backdrop images, cast photos, and trailers
+- **Fallback System**: Gracefully falls back to OMDB if TMDB is unavailable
+- **Smart Data Combination**: Merges the best data from both sources
 
 ### Movie Management
 - View all movies in a beautiful grid layout
 - Click for detailed movie information
 - Delete movies from your collection
 
-### Movie Details Modal
-- High-quality movie posters
-- Comprehensive information display
-- IMDb and Rotten Tomatoes ratings
-- Full cast and crew information
-- Plot summaries
+### Enhanced Movie Details Modal 🆕
+- **Backdrop Images**: Full-width high-resolution backdrop images from TMDB
+- **Cast Gallery**: Actor photos with character names in scrollable carousel
+- **Movie Trailers**: Direct YouTube trailer links with watch buttons
+- **TMDB Ratings**: Community ratings with vote counts
+- **Similar Movies**: Discover related movies with posters
+- **Rich Metadata**: High-quality posters, comprehensive cast/crew info
+- **Multiple Ratings**: IMDb, Rotten Tomatoes, and TMDB scores
+- **Personal Management**: Notes, tags, watch status, lending tracker
 
 ## Recent Fixes & Current Setup
 

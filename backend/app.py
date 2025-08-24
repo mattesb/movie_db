@@ -7,6 +7,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -47,6 +48,15 @@ class Movie(db.Model):
     lent_to = db.Column(db.String(255))  # Who borrowed it
     date_lent = db.Column(db.DateTime)  # When it was lent
     
+    # TMDB enhanced data storage
+    tmdb_id = db.Column(db.Integer)  # TMDB movie ID
+    backdrop_url = db.Column(db.String(512))  # High-res backdrop image
+    tmdb_rating = db.Column(db.Float)  # TMDB community rating
+    tmdb_vote_count = db.Column(db.Integer)  # Number of votes
+    cast_data = db.Column(db.Text)  # JSON string of cast info
+    trailers_data = db.Column(db.Text)  # JSON string of trailers
+    similar_movies_data = db.Column(db.Text)  # JSON string of similar movies
+    
     # Movie sources (JSON array)
     sources = db.Column(db.Text)  # JSON string of sources ["Apple TV", "UHD Disk"]
 
@@ -74,7 +84,214 @@ class Movie(db.Model):
             "lent_to": self.lent_to,
             "date_lent": self.date_lent.isoformat() if self.date_lent else None,
             "sources": json.loads(self.sources) if self.sources else [],
+            # TMDB enhanced data
+            "tmdb_id": self.tmdb_id,
+            "backdrop_url": self.backdrop_url,
+            "tmdb_rating": self.tmdb_rating,
+            "tmdb_vote_count": self.tmdb_vote_count,
+            "cast_data": json.loads(self.cast_data) if self.cast_data else [],
+            "trailers_data": json.loads(self.trailers_data) if self.trailers_data else [],
+            "similar_movies_data": json.loads(self.similar_movies_data) if self.similar_movies_data else [],
         }
+
+def search_movie_comprehensive(title):
+    """
+    Search for a movie using both TMDB and OMDB APIs to get comprehensive data
+    Returns enriched movie data or None if not found
+    """
+    # Get API keys
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    omdb_api_key = os.getenv("OMDB_API_KEY", "3e2ed480")
+    
+    if not tmdb_api_key:
+        print("Warning: TMDB_API_KEY not found, falling back to OMDB only")
+        return search_movie_omdb_only(title, omdb_api_key)
+    
+    # Step 1: Search TMDB for the movie
+    tmdb_search_url = "https://api.themoviedb.org/3/search/movie"
+    tmdb_params = {
+        "api_key": tmdb_api_key,
+        "query": title,
+        "language": "en-US"
+    }
+    
+    try:
+        tmdb_search_resp = requests.get(tmdb_search_url, params=tmdb_params)
+        tmdb_search_resp.raise_for_status()
+        tmdb_search_data = tmdb_search_resp.json()
+        
+        if not tmdb_search_data.get("results"):
+            print(f"TMDB: No results found for '{title}'")
+            return search_movie_omdb_only(title, omdb_api_key)
+        
+        # Get the first (most relevant) result
+        tmdb_movie = tmdb_search_data["results"][0]
+        movie_id = tmdb_movie["id"]
+        
+        # Step 2: Get detailed movie information from TMDB
+        tmdb_details_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+        tmdb_details_params = {
+            "api_key": tmdb_api_key,
+            "language": "en-US",
+            "append_to_response": "credits,videos,similar"
+        }
+        
+        tmdb_details_resp = requests.get(tmdb_details_url, params=tmdb_details_params)
+        tmdb_details_resp.raise_for_status()
+        tmdb_details = tmdb_details_resp.json()
+        
+        # Step 3: Try to get additional ratings from OMDB (for Rotten Tomatoes, etc.)
+        omdb_data = None
+        if omdb_api_key:
+            try:
+                omdb_resp = requests.get("http://www.omdbapi.com/", 
+                                       params={"t": tmdb_details["title"], "apikey": omdb_api_key})
+                omdb_resp.raise_for_status()
+                omdb_result = omdb_resp.json()
+                if omdb_result.get("Response") == "True":
+                    omdb_data = omdb_result
+            except Exception as e:
+                print(f"OMDB lookup failed: {e}")
+        
+        # Step 4: Combine the data
+        return combine_movie_data(tmdb_details, omdb_data)
+        
+    except Exception as e:
+        print(f"TMDB lookup failed: {e}")
+        return search_movie_omdb_only(title, omdb_api_key)
+
+def search_movie_omdb_only(title, omdb_api_key):
+    """Fallback to OMDB-only search"""
+    if not omdb_api_key:
+        return None
+        
+    try:
+        resp = requests.get("http://www.omdbapi.com/", 
+                          params={"t": title, "apikey": omdb_api_key})
+        resp.raise_for_status()
+        data = resp.json()
+        
+        if data.get("Response") != "True":
+            return None
+            
+        # Convert OMDB data to our format
+        return {
+            "title": data.get("Title"),
+            "year": data.get("Year"),
+            "genre": data.get("Genre"),
+            "director": data.get("Director"),
+            "actors": data.get("Actors"),
+            "plot": data.get("Plot"),
+            "poster_url": data.get("Poster") if data.get("Poster") != "N/A" else None,
+            "runtime": data.get("Runtime"),
+            "imdb_score": data.get("imdbRating") if data.get("imdbRating") != "N/A" else None,
+            "rotten_tomatoes_score": extract_rating(data.get("Ratings", []), "Rotten Tomatoes"),
+            "metacritic_score": extract_rating(data.get("Ratings", []), "Metacritic"),
+            "tmdb_id": None,
+            "backdrop_url": None,
+            "trailers": [],
+            "cast": [],
+            "similar_movies": []
+        }
+    except Exception as e:
+        print(f"OMDB search failed: {e}")
+        return None
+
+def combine_movie_data(tmdb_data, omdb_data):
+    """Combine TMDB and OMDB data into our movie format"""
+    
+    # Extract cast (top 5 actors)
+    cast = []
+    if tmdb_data.get("credits", {}).get("cast"):
+        cast = [
+            {
+                "name": actor["name"],
+                "character": actor.get("character", ""),
+                "profile_path": f"https://image.tmdb.org/t/p/w185{actor['profile_path']}" if actor.get("profile_path") else None
+            }
+            for actor in tmdb_data["credits"]["cast"][:5]
+        ]
+    
+    # Extract trailers (YouTube videos)
+    trailers = []
+    if tmdb_data.get("videos", {}).get("results"):
+        trailers = [
+            {
+                "name": video["name"],
+                "key": video["key"],
+                "site": video["site"],
+                "type": video["type"],
+                "url": f"https://www.youtube.com/watch?v={video['key']}" if video["site"] == "YouTube" else None
+            }
+            for video in tmdb_data["videos"]["results"]
+            if video["type"] in ["Trailer", "Teaser"] and video["site"] == "YouTube"
+        ][:3]  # Limit to 3 trailers
+    
+    # Extract similar movies (top 5)
+    similar_movies = []
+    if tmdb_data.get("similar", {}).get("results"):
+        similar_movies = [
+            {
+                "id": movie["id"],
+                "title": movie["title"],
+                "poster_path": f"https://image.tmdb.org/t/p/w300{movie['poster_path']}" if movie.get("poster_path") else None,
+                "release_date": movie.get("release_date"),
+                "overview": movie.get("overview", "")[:200] + "..." if len(movie.get("overview", "")) > 200 else movie.get("overview", "")
+            }
+            for movie in tmdb_data["similar"]["results"][:5]
+        ]
+    
+    # Get directors from crew
+    directors = []
+    if tmdb_data.get("credits", {}).get("crew"):
+        directors = [
+            person["name"] for person in tmdb_data["credits"]["crew"]
+            if person.get("job") == "Director"
+        ]
+    
+    # Combine genres
+    genres = ", ".join([genre["name"] for genre in tmdb_data.get("genres", [])])
+    
+    # Build the combined data
+    combined_data = {
+        "title": tmdb_data.get("title"),
+        "year": tmdb_data.get("release_date", "")[:4] if tmdb_data.get("release_date") else None,
+        "genre": genres,
+        "director": ", ".join(directors) if directors else None,
+        "actors": ", ".join([actor["name"] for actor in cast]) if cast else None,
+        "plot": tmdb_data.get("overview"),
+        "poster_url": f"https://image.tmdb.org/t/p/w500{tmdb_data['poster_path']}" if tmdb_data.get("poster_path") else None,
+        "backdrop_url": f"https://image.tmdb.org/t/p/w1280{tmdb_data['backdrop_path']}" if tmdb_data.get("backdrop_path") else None,
+        "runtime": f"{tmdb_data.get('runtime')} min" if tmdb_data.get("runtime") else None,
+        "imdb_score": None,  # Will be filled from OMDB if available
+        "rotten_tomatoes_score": None,  # Will be filled from OMDB if available  
+        "metacritic_score": None,  # Will be filled from OMDB if available
+        "tmdb_id": tmdb_data.get("id"),
+        "tmdb_rating": tmdb_data.get("vote_average"),
+        "tmdb_vote_count": tmdb_data.get("vote_count"),
+        "trailers": trailers,
+        "cast": cast,
+        "similar_movies": similar_movies
+    }
+    
+    # Overlay OMDB data if available (for additional ratings)
+    if omdb_data:
+        combined_data["imdb_score"] = omdb_data.get("imdbRating") if omdb_data.get("imdbRating") != "N/A" else None
+        combined_data["rotten_tomatoes_score"] = extract_rating(omdb_data.get("Ratings", []), "Rotten Tomatoes")
+        combined_data["metacritic_score"] = extract_rating(omdb_data.get("Ratings", []), "Metacritic")
+        
+        # Use OMDB runtime if TMDB doesn't have it
+        if not combined_data["runtime"] and omdb_data.get("Runtime") != "N/A":
+            combined_data["runtime"] = omdb_data.get("Runtime")
+    
+    return combined_data
+
+def extract_rating(ratings_array, source_name):
+    """Extract rating from OMDB ratings array"""
+    for rating in ratings_array:
+        if source_name.lower() in rating.get("Source", "").lower():
+            return rating.get("Value")
+    return None
 
 @app.route("/movies", methods=["GET", "POST"])
 def movies():
@@ -121,44 +338,61 @@ def search_movie():
     if existing_movie:
         return jsonify({"error": "Movie already exists in your collection", "movie": existing_movie.to_dict()}), 409
     
-    # Call OMDB API
-    api_key = os.getenv("OMDB_API_KEY", "3e2ed480")
-    resp = requests.get("http://www.omdbapi.com/", params={"t": title, "apikey": api_key})
-    data = resp.json()
-    if data.get("Response") != "True":
+    # Search using both TMDB and OMDB for comprehensive data
+    movie_data = search_movie_comprehensive(title)
+    if not movie_data:
         return jsonify({"error": "movie not found"}), 404
-    # Extract ratings properly
-    imdb_score = data.get("imdbRating")
-    rotten_tomatoes_score = None
-    metacritic_score = None
-    
-    # Search through ratings array for specific sources
-    for rating in data.get("Ratings", []):
-        source = rating.get("Source", "")
-        value = rating.get("Value", "")
-        
-        if "Rotten Tomatoes" in source:
-            rotten_tomatoes_score = value
-        elif "Metacritic" in source:
-            metacritic_score = value
-    
+    # Create movie from comprehensive data
     movie = Movie(
-        title=data.get("Title"),
-        year=data.get("Year"),
-        genre=data.get("Genre"),
-        director=data.get("Director"),
-        actors=data.get("Actors"),
-        imdb_score=imdb_score,
-        rotten_tomatoes_score=rotten_tomatoes_score,
-        metacritic_score=metacritic_score,
-        plot=data.get("Plot"),
-        poster_url=data.get("Poster"),
-        runtime=data.get("Runtime"),
-        sources=json.dumps(movie_sources) if movie_sources else None,  # Add sources as JSON
+        title=movie_data.get("title"),
+        year=movie_data.get("year"),
+        genre=movie_data.get("genre"),
+        director=movie_data.get("director"),
+        actors=movie_data.get("actors"),
+        imdb_score=movie_data.get("imdb_score"),
+        rotten_tomatoes_score=movie_data.get("rotten_tomatoes_score"),
+        metacritic_score=movie_data.get("metacritic_score"),
+        plot=movie_data.get("plot"),
+        poster_url=movie_data.get("poster_url"),
+        runtime=movie_data.get("runtime"),
+        sources=json.dumps(movie_sources) if movie_sources else None,
+        # Store TMDB data directly in database
+        tmdb_id=movie_data.get("tmdb_id"),
+        backdrop_url=movie_data.get("backdrop_url"),
+        tmdb_rating=movie_data.get("tmdb_rating"),
+        tmdb_vote_count=movie_data.get("tmdb_vote_count"),
+        cast_data=json.dumps(movie_data.get("cast", [])),
+        trailers_data=json.dumps(movie_data.get("trailers", [])),
+        similar_movies_data=json.dumps(movie_data.get("similar_movies", [])),
     )
     db.session.add(movie)
     db.session.commit()
+    
+    # Return the saved movie with all data (including TMDB data from database)
     return jsonify(movie.to_dict()), 201
+
+@app.route("/movies/<int:movie_id>/enhanced", methods=["GET"])
+def get_enhanced_movie_details(movie_id):
+    """Get enhanced movie details - fetch and store TMDB data if not already present"""
+    movie = Movie.query.get_or_404(movie_id)
+    
+    # Check if TMDB data is already stored
+    if movie.tmdb_id is None:
+        # TMDB data not stored yet, fetch and save it
+        movie_data = search_movie_comprehensive(movie.title)
+        if movie_data:
+            # Update the movie with TMDB data
+            movie.tmdb_id = movie_data.get("tmdb_id")
+            movie.backdrop_url = movie_data.get("backdrop_url")
+            movie.tmdb_rating = movie_data.get("tmdb_rating")
+            movie.tmdb_vote_count = movie_data.get("tmdb_vote_count")
+            movie.cast_data = json.dumps(movie_data.get("cast", []))
+            movie.trailers_data = json.dumps(movie_data.get("trailers", []))
+            movie.similar_movies_data = json.dumps(movie_data.get("similar_movies", []))
+            db.session.commit()
+    
+    # Return movie data (now including stored TMDB data)
+    return jsonify(movie.to_dict())
 
 @app.route("/movies/filter", methods=["GET"])
 def filter_movies():
