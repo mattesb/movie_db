@@ -1,11 +1,15 @@
 # app.py
 import json
 import os
+from datetime import datetime
+from functools import wraps
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session
+from flask_bcrypt import Bcrypt
 from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
@@ -16,12 +20,74 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
     "DATABASE_URL", "postgresql://postgres:postgres@db:5432/moviedb"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "your-secret-key-change-this")
 
-# Enable CORS for all routes
-CORS(app)
+# Enable CORS for all routes - include credentials for session management
+CORS(app, supports_credentials=True, origins=["http://localhost:3001", "http://localhost:3000"])
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+
+# User model for authentication and role management
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(60), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='user')  # 'user' or 'admin'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+
+    def set_password(self, password):
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.check_password_hash(self.password_hash, password)
+
+    def has_role(self, role):
+        return self.role == role
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'role': self.role,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'is_active': self.is_active
+        }
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+# Role-based authorization decorator
+def role_required(role):
+    def decorator(f):
+        @wraps(f)
+        @login_required
+        def decorated_function(*args, **kwargs):
+            if not current_user.has_role(role):
+                return jsonify({'error': 'Insufficient permissions'}), 403
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+# Authentication check decorator for API responses
+def auth_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 class Movie(db.Model):
@@ -438,12 +504,87 @@ def search_movie_by_imdb_id(imdb_id):
     return None
 
 
+# Authentication routes
+@app.route("/auth/register", methods=["POST"])
+def register():
+    data = request.json
+    if not data or not data.get('username') or not data.get('email') or not data.get('password'):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    # Check if user already exists
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Username already exists'}), 409
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already exists'}), 409
+
+    # Create new user
+    user = User(
+        username=data['username'],
+        email=data['email'],
+        role=data.get('role', 'user')  # Default to 'user' role
+    )
+    user.set_password(data['password'])
+
+    db.session.add(user)
+    db.session.commit()
+
+    return jsonify({'message': 'User created successfully', 'user': user.to_dict()}), 201
+
+
+@app.route("/auth/login", methods=["POST"])
+def login():
+    data = request.json
+    if not data or not data.get('username') or not data.get('password'):
+        return jsonify({'error': 'Username and password required'}), 400
+
+    user = User.query.filter_by(username=data['username']).first()
+
+    if user and user.check_password(data['password']) and user.is_active:
+        login_user(user, remember=True)
+        return jsonify({
+            'message': 'Login successful',
+            'user': user.to_dict()
+        }), 200
+    else:
+        return jsonify({'error': 'Invalid credentials'}), 401
+
+
+@app.route("/auth/logout", methods=["POST"])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({'message': 'Logout successful'}), 200
+
+
+@app.route("/auth/user", methods=["GET"])
+@login_required
+def get_current_user():
+    return jsonify({'user': current_user.to_dict()}), 200
+
+
+@app.route("/auth/check", methods=["GET"])
+def check_auth():
+    if current_user.is_authenticated:
+        return jsonify({
+            'authenticated': True,
+            'user': current_user.to_dict()
+        }), 200
+    else:
+        return jsonify({'authenticated': False}), 200
+
+
+# Movie routes (now with authentication)
 @app.route("/movies", methods=["GET", "POST"])
+@auth_required
 def movies():
     if request.method == "GET":
+        # Both users and admins can view movies
         movies = Movie.query.all()
         return jsonify([m.to_dict() for m in movies])
     if request.method == "POST":
+        # Only admins can manually add movies
+        if not current_user.has_role('admin'):
+            return jsonify({'error': 'Admin role required to add movies'}), 403
         data = request.json
         # Handle sources field conversion
         if "sources" in data and isinstance(data["sources"], list):
@@ -455,11 +596,16 @@ def movies():
 
 
 @app.route("/movies/<int:movie_id>", methods=["GET", "PUT", "DELETE"])
+@auth_required
 def movie_detail(movie_id):
     movie = Movie.query.get_or_404(movie_id)
     if request.method == "GET":
+        # Both users and admins can view movie details
         return jsonify(movie.to_dict())
     if request.method == "PUT":
+        # Only admins can update movie details
+        if not current_user.has_role('admin'):
+            return jsonify({'error': 'Admin role required to update movies'}), 403
         for key, value in request.json.items():
             # Handle sources field conversion
             if key == "sources" and isinstance(value, list):
@@ -468,12 +614,16 @@ def movie_detail(movie_id):
         db.session.commit()
         return jsonify(movie.to_dict())
     if request.method == "DELETE":
+        # Only admins can delete movies
+        if not current_user.has_role('admin'):
+            return jsonify({'error': 'Admin role required to delete movies'}), 403
         db.session.delete(movie)
         db.session.commit()
         return jsonify({"message": "deleted"})
 
 
 @app.route("/movies/search", methods=["GET"])
+@role_required('admin')
 def search_movie():
     title = request.args.get("title")
     movie_sources = request.args.getlist(
@@ -527,6 +677,7 @@ def search_movie():
 
 
 @app.route("/movies/<int:movie_id>/enhanced", methods=["GET"])
+@auth_required
 def get_enhanced_movie_details(movie_id):
     """Get enhanced movie details - fetch and store TMDB data if not already present"""
     movie = Movie.query.get_or_404(movie_id)
@@ -551,6 +702,7 @@ def get_enhanced_movie_details(movie_id):
 
 
 @app.route("/movies/search/imdb", methods=["GET"])
+@role_required('admin')
 def search_movie_by_imdb():
     """Search and add movie by IMDB ID"""
     imdb_id = request.args.get("imdb_id")
@@ -614,6 +766,7 @@ def search_movie_by_imdb():
 
 
 @app.route("/movies/filter", methods=["GET"])
+@auth_required
 def filter_movies():
     query = Movie.query
 
@@ -656,6 +809,7 @@ def filter_movies():
 
 
 @app.route("/movies/stats", methods=["GET"])
+@auth_required
 def movie_stats():
     total_movies = Movie.query.count()
 
@@ -692,6 +846,44 @@ def movie_stats():
             ),
         }
     )
+
+
+@app.route("/init-users", methods=["POST"])
+def init_demo_users():
+    """Initialize demo users - only for development"""
+    try:
+        # Create tables if they don't exist
+        db.create_all()
+
+        # Check if admin user already exists
+        admin_user = User.query.filter_by(username='admin').first()
+        if not admin_user:
+            # Create admin user
+            admin_user = User(
+                username='admin',
+                email='admin@example.com',
+                role='admin'
+            )
+            admin_user.set_password('admin')
+            db.session.add(admin_user)
+
+        # Check if demo user already exists
+        demo_user = User.query.filter_by(username='user').first()
+        if not demo_user:
+            # Create demo user
+            demo_user = User(
+                username='user',
+                email='user@example.com',
+                role='user'
+            )
+            demo_user.set_password('user')
+            db.session.add(demo_user)
+
+        # Commit changes
+        db.session.commit()
+        return jsonify({'message': 'Demo users initialized successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == "__main__":

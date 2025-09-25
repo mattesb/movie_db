@@ -5,13 +5,37 @@ import CollectionView from './components/CollectionView';
 import SearchView from './components/SearchView';
 import StatisticsView from './components/StatisticsView';
 import MovieFilters from './components/MovieFilters';
+import AuthPage from './components/AuthPage';
 import { ToastProvider, useToast } from './components/ToastContainer';
+import { AuthProvider, useAuth } from './components/AuthContext';
 
 // Dynamic API URL - uses the same host as the frontend with backend port
 const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5001`;
 
+// User info component
+function UserInfo() {
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  return (
+    <div className="user-info">
+      <span>Welcome, {user.username}</span>
+      <span className={`user-role ${user.role}`}>
+        {user.role}
+      </span>
+      <button onClick={handleLogout} className="logout-button">
+        Logout
+      </button>
+    </div>
+  );
+}
+
 function AppContent() {
   const { showSuccess, showError } = useToast();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const [movies, setMovies] = useState([]);
   const [filteredMovies, setFilteredMovies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +69,9 @@ function AppContent() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/movies`);
+      const response = await fetch(`${API_BASE_URL}/movies`, {
+        credentials: 'include', // Include authentication cookies
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch movies');
       }
@@ -60,7 +86,9 @@ function AppContent() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/movies/stats`);
+      const response = await fetch(`${API_BASE_URL}/movies/stats`, {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -87,7 +115,9 @@ function AppContent() {
         }
       });
 
-      const response = await fetch(`${API_BASE_URL}/movies/filter?${params}`);
+      const response = await fetch(`${API_BASE_URL}/movies/filter?${params}`, {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         setFilteredMovies(data);
@@ -131,7 +161,9 @@ function AppContent() {
         url += `&sources=${encodeURIComponent(source)}`;
       });
       
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        credentials: 'include',
+      });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Movie not found');
@@ -152,6 +184,7 @@ function AppContent() {
       setError(null);
       const response = await fetch(`${API_BASE_URL}/movies/${movieId}`, {
         method: 'PUT',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -176,6 +209,7 @@ function AppContent() {
       setError(null);
       const response = await fetch(`${API_BASE_URL}/movies/${movieId}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
       if (!response.ok) {
         throw new Error('Failed to delete movie');
@@ -253,27 +287,51 @@ function AppContent() {
     }
   };
 
+  // Show loading screen during authentication check
+  if (authLoading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-container">
+          <div className="auth-header">
+            <h1>🎬 Movie Database</h1>
+            <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show authentication page if not logged in
+  if (!isAuthenticated) {
+    return <AuthPage />;
+  }
+
   return (
     <div className="container">
       <header className="header">
-        <h1>🎬 Movie Database</h1>
-        <p>Discover, search, and manage your favorite movies</p>
-        {stats && (
-          <div style={{ 
-            marginTop: '15px', 
-            fontSize: '1rem', 
-            opacity: 0.9,
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '20px',
-            flexWrap: 'wrap'
-          }}>
-            <span>📚 {stats.total_movies} Movies</span>
-            <span>🎭 {Object.keys(stats.genres).length} Genres</span>
-            <span>🎬 {Object.keys(stats.top_directors).length} Directors</span>
-            <span>📅 {Object.keys(stats.decades).length} Decades</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1>🎬 Movie Database</h1>
+            <p>Discover, search, and manage your favorite movies</p>
+            {stats && (
+              <div style={{
+                marginTop: '15px',
+                fontSize: '1rem',
+                opacity: 0.9,
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '20px',
+                flexWrap: 'wrap'
+              }}>
+                <span>📚 {stats.total_movies} Movies</span>
+                <span>🎭 {Object.keys(stats.genres).length} Genres</span>
+                <span>🎬 {Object.keys(stats.top_directors).length} Directors</span>
+                <span>📅 {Object.keys(stats.decades).length} Decades</span>
+              </div>
+            )}
           </div>
-        )}
+          <UserInfo />
+        </div>
       </header>
 
       <Navigation 
@@ -303,9 +361,11 @@ function AppContent() {
 
 function App() {
   return (
-    <ToastProvider>
-      <AppContent />
-    </ToastProvider>
+    <AuthProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 

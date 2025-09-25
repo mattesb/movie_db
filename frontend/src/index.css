@@ -16,6 +16,257 @@ body {
   line-height: 1.6;
 }
 
+/* Authentication Styles */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+}
+
+.auth-container {
+  background: #2a2a2a;
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid #3a3a3a;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.auth-header h1 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: #e5e5e7;
+  font-weight: 700;
+}
+
+.auth-header p {
+  color: #a8a8aa;
+  font-size: 1rem;
+}
+
+.auth-form {
+  margin-bottom: 30px;
+}
+
+.auth-form h2 {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #e5e5e7;
+  font-size: 1.5rem;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #e5e5e7;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px 16px;
+  background: #1a1a1a;
+  border: 2px solid #3a3a3a;
+  border-radius: 8px;
+  color: #e5e5e7;
+  font-size: 1rem;
+  transition: border-color 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+}
+
+.form-group input:disabled,
+.form-group select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-button {
+  width: 100%;
+  background: linear-gradient(135deg, #007aff 0%, #5856d6 100%);
+  color: white;
+  border: none;
+  padding: 14px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+
+.auth-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 122, 255, 0.3);
+}
+
+.auth-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.auth-toggle {
+  text-align: center;
+  margin-top: 20px;
+  color: #a8a8aa;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #007aff;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: inherit;
+}
+
+.link-button:hover:not(:disabled) {
+  color: #5856d6;
+}
+
+.link-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  color: #ff453a;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.demo-accounts {
+  background: rgba(52, 199, 89, 0.1);
+  border: 1px solid rgba(52, 199, 89, 0.3);
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 25px;
+}
+
+.demo-accounts h3 {
+  color: #30d158;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+
+.demo-accounts p {
+  margin: 5px 0;
+  font-size: 0.85rem;
+  color: #a8a8aa;
+}
+
+.auth-info {
+  border-top: 1px solid #3a3a3a;
+  padding-top: 25px;
+}
+
+.auth-info h3 {
+  text-align: center;
+  color: #e5e5e7;
+  margin-bottom: 20px;
+  font-size: 1.1rem;
+}
+
+.access-level {
+  margin-bottom: 20px;
+}
+
+.access-level strong {
+  display: block;
+  color: #e5e5e7;
+  margin-bottom: 8px;
+}
+
+.access-level ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.access-level li {
+  color: #a8a8aa;
+  padding: 4px 0;
+  font-size: 0.9rem;
+  position: relative;
+  padding-left: 20px;
+}
+
+.access-level li:before {
+  content: "•";
+  color: #007aff;
+  position: absolute;
+  left: 0;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: #2a2a2a;
+  padding: 10px 20px;
+  border-radius: 12px;
+  margin-left: auto;
+  border: 1px solid #3a3a3a;
+}
+
+.user-role {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.user-role.admin {
+  background: rgba(255, 149, 0, 0.2);
+  color: #ff9500;
+  border: 1px solid rgba(255, 149, 0, 0.3);
+}
+
+.user-role.user {
+  background: rgba(0, 122, 255, 0.2);
+  color: #007aff;
+  border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.logout-button {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  color: #ff453a;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.logout-button:hover {
+  background: rgba(255, 59, 48, 0.2);
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;

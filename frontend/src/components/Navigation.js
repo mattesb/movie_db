@@ -1,12 +1,20 @@
 import React from 'react';
+import { useAuth } from './AuthContext';
 
 function Navigation({ currentView, onViewChange }) {
-  const menuItems = [
-    { id: 'collection', label: '🎬 My Collection', icon: '🎬' },
-    { id: 'search', label: '🔍 Add Movies', icon: '🔍' },
-    { id: 'statistics', label: '📊 Statistics', icon: '📊' },
-    { id: 'filters', label: '🎛️ Filters', icon: '🎛️' }
+  const { isAdmin } = useAuth();
+
+  const allMenuItems = [
+    { id: 'collection', label: '🎬 My Collection', icon: '🎬', roles: ['user', 'admin'] },
+    { id: 'search', label: '🔍 Add Movies', icon: '🔍', roles: ['admin'] },
+    { id: 'statistics', label: '📊 Statistics', icon: '📊', roles: ['user', 'admin'] },
+    { id: 'filters', label: '🎛️ Filters', icon: '🎛️', roles: ['user', 'admin'] }
   ];
+
+  // Filter menu items based on user role
+  const menuItems = allMenuItems.filter(item =>
+    item.roles.includes(isAdmin() ? 'admin' : 'user')
+  );
 
   return (
     <nav style={{
@@ -56,7 +64,7 @@ function Navigation({ currentView, onViewChange }) {
         fontSize: '0.9rem',
         opacity: 0.7
       }}>
-        <strong>Navigation:</strong> Use the menu above to switch between different sections
+        <strong>Navigation:</strong> {isAdmin() ? 'Admin access - Full movie management' : 'User access - View only'}
       </div>
     </nav>
   );
