@@ -116,13 +116,21 @@ function AppContent() {
     });
   };
 
-  const searchMovie = async (title, sources = []) => {
+  const searchMovie = async (searchTerm, sources = [], searchType = 'title') => {
     try {
       setError(null);
-      let url = `${API_BASE_URL}/movies/search?title=${encodeURIComponent(title)}`;
+      let url;
+      
+      if (searchType === 'imdb') {
+        url = `${API_BASE_URL}/movies/search/imdb?imdb_id=${encodeURIComponent(searchTerm)}`;
+      } else {
+        url = `${API_BASE_URL}/movies/search?title=${encodeURIComponent(searchTerm)}`;
+      }
+      
       sources.forEach(source => {
         url += `&sources=${encodeURIComponent(source)}`;
       });
+      
       const response = await fetch(url);
       if (!response.ok) {
         const errorData = await response.json();
