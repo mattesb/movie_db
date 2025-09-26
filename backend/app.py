@@ -22,14 +22,49 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "your-secret-key-change-this")
 
-# Enable CORS for all routes - include credentials for session management
-CORS(app, supports_credentials=True, origins=["http://localhost:3001", "http://localhost:3000"])
+# Disable automatic CORS - we'll handle it manually in routes
+# CORS(app,
+#      supports_credentials=True,
+#      origins=["http://localhost:3001", "http://localhost:3000", "http://127.0.0.1:3001", "http://frontend:3001"],
+#      allow_headers=["Content-Type", "Authorization"],
+#      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+
+# Global CORS handler
+@app.after_request
+def after_request(response):
+    # Allow any origin for external access
+    origin = request.headers.get('Origin')
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
+
+
+# Helper function to add CORS headers
+def add_cors_headers(response, origin=None):
+    """Add CORS headers to response"""
+    # Allow any origin for external access
+    if origin:
+        response.headers['Access-Control-Allow-Origin'] = origin
+    else:
+        response.headers['Access-Control-Allow-Origin'] = '*'
+
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
 
 
 # User model for authentication and role management
@@ -505,17 +540,25 @@ def search_movie_by_imdb_id(imdb_id):
 
 
 # Authentication routes
-@app.route("/auth/register", methods=["POST"])
+@app.route("/auth/register", methods=["POST", "OPTIONS"])
 def register():
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify()
+        return add_cors_headers(response, request.headers.get('Origin'))
+
     data = request.json
     if not data or not data.get('username') or not data.get('email') or not data.get('password'):
-        return jsonify({'error': 'Missing required fields'}), 400
+        response = jsonify({'error': 'Missing required fields'})
+        return add_cors_headers(response, request.headers.get('Origin')), 400
 
     # Check if user already exists
     if User.query.filter_by(username=data['username']).first():
-        return jsonify({'error': 'Username already exists'}), 409
+        response = jsonify({'error': 'Username already exists'})
+        return add_cors_headers(response, request.headers.get('Origin')), 409
     if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 409
+        response = jsonify({'error': 'Email already exists'})
+        return add_cors_headers(response, request.headers.get('Origin')), 409
 
     # Create new user
     user = User(
@@ -528,25 +571,34 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    return jsonify({'message': 'User created successfully', 'user': user.to_dict()}), 201
+    response = jsonify({'message': 'User created successfully', 'user': user.to_dict()})
+    return add_cors_headers(response, request.headers.get('Origin')), 201
 
 
-@app.route("/auth/login", methods=["POST"])
+@app.route("/auth/login", methods=["POST", "OPTIONS"])
 def login():
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify()
+        return add_cors_headers(response, request.headers.get('Origin'))
+
     data = request.json
     if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'error': 'Username and password required'}), 400
+        response = jsonify({'error': 'Username and password required'})
+        return add_cors_headers(response, request.headers.get('Origin')), 400
 
     user = User.query.filter_by(username=data['username']).first()
 
     if user and user.check_password(data['password']) and user.is_active:
         login_user(user, remember=True)
-        return jsonify({
+        response = jsonify({
             'message': 'Login successful',
             'user': user.to_dict()
-        }), 200
+        })
+        return add_cors_headers(response, request.headers.get('Origin')), 200
     else:
-        return jsonify({'error': 'Invalid credentials'}), 401
+        response = jsonify({'error': 'Invalid credentials'})
+        return add_cors_headers(response, request.headers.get('Origin')), 401
 
 
 @app.route("/auth/logout", methods=["POST"])
@@ -562,15 +614,22 @@ def get_current_user():
     return jsonify({'user': current_user.to_dict()}), 200
 
 
-@app.route("/auth/check", methods=["GET"])
+@app.route("/auth/check", methods=["GET", "OPTIONS"])
 def check_auth():
+    # Handle preflight request
+    if request.method == 'OPTIONS':
+        response = jsonify()
+        return add_cors_headers(response, request.headers.get('Origin'))
+
     if current_user.is_authenticated:
-        return jsonify({
+        response = jsonify({
             'authenticated': True,
             'user': current_user.to_dict()
-        }), 200
+        })
+        return add_cors_headers(response, request.headers.get('Origin')), 200
     else:
-        return jsonify({'authenticated': False}), 200
+        response = jsonify({'authenticated': False})
+        return add_cors_headers(response, request.headers.get('Origin')), 200
 
 
 # Movie routes (now with authentication)

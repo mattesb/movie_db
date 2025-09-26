@@ -9,8 +9,19 @@ import AuthPage from './components/AuthPage';
 import { ToastProvider, useToast } from './components/ToastContainer';
 import { AuthProvider, useAuth } from './components/AuthContext';
 
-// Dynamic API URL - uses the same host as the frontend with backend port
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5001`;
+// Dynamic API URL - determined at runtime (v3) - UPDATED FOR EXTERNAL ACCESS
+const getApiBaseUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    console.log('Using env API URL:', process.env.REACT_APP_API_URL);
+    return process.env.REACT_APP_API_URL;
+  }
+  // Use dynamic values that React can't optimize away at build time
+  const protocol = window['location']['protocol'];
+  const hostname = window['location']['hostname'];
+  const apiUrl = `${protocol}//${hostname}:5001`;
+  console.log('Dynamic API URL detected:', apiUrl);
+  return apiUrl;
+};
 
 // User info component
 function UserInfo() {
@@ -69,7 +80,7 @@ function AppContent() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/movies`, {
+      const response = await fetch(`${getApiBaseUrl()}/movies`, {
         credentials: 'include', // Include authentication cookies
       });
       if (!response.ok) {
@@ -86,7 +97,7 @@ function AppContent() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/movies/stats`, {
+      const response = await fetch(`${getApiBaseUrl()}/movies/stats`, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -115,7 +126,7 @@ function AppContent() {
         }
       });
 
-      const response = await fetch(`${API_BASE_URL}/movies/filter?${params}`, {
+      const response = await fetch(`${getApiBaseUrl()}/movies/filter?${params}`, {
         credentials: 'include',
       });
       if (response.ok) {
@@ -152,9 +163,9 @@ function AppContent() {
       let url;
       
       if (searchType === 'imdb') {
-        url = `${API_BASE_URL}/movies/search/imdb?imdb_id=${encodeURIComponent(searchTerm)}`;
+        url = `${getApiBaseUrl()}/movies/search/imdb?imdb_id=${encodeURIComponent(searchTerm)}`;
       } else {
-        url = `${API_BASE_URL}/movies/search?title=${encodeURIComponent(searchTerm)}`;
+        url = `${getApiBaseUrl()}/movies/search?title=${encodeURIComponent(searchTerm)}`;
       }
       
       sources.forEach(source => {
@@ -182,7 +193,7 @@ function AppContent() {
   const updateMovie = async (movieId, updateData) => {
     try {
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/movies/${movieId}`, {
+      const response = await fetch(`${getApiBaseUrl()}/movies/${movieId}`, {
         method: 'PUT',
         credentials: 'include',
         headers: {
@@ -207,7 +218,7 @@ function AppContent() {
   const deleteMovie = async (movieId) => {
     try {
       setError(null);
-      const response = await fetch(`${API_BASE_URL}/movies/${movieId}`, {
+      const response = await fetch(`${getApiBaseUrl()}/movies/${movieId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -359,6 +370,7 @@ function AppContent() {
   );
 }
 
+// Main App Component - Build v4 FINAL with dynamic URL detection - CACHE BUSTER 2025-09-26
 function App() {
   return (
     <AuthProvider>

@@ -1,5 +1,4 @@
 # docker-compose.yml
-version: "3.8"
 services:
   db:
     image: postgres:15-alpine
@@ -30,13 +29,12 @@ services:
     working_dir: /app
     volumes:
       - ./frontend:/app
-    command: sh -c "npx serve -s build -l 3001"
+    command: sh -c "npm run build && npx serve -s build -l 3001"
     ports:
       - "3001:3001"
     networks:
       - movie_net
     environment:
-      # Remove hardcoded IP - let frontend determine API URL dynamically
       - NODE_ENV=production
 networks:
   movie_net:

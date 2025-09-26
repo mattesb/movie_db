@@ -10,7 +10,18 @@ export const useAuth = () => {
   return context;
 };
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5001`;
+const getApiBaseUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    console.log('Auth: Using env API URL:', process.env.REACT_APP_API_URL);
+    return process.env.REACT_APP_API_URL;
+  }
+  // Use dynamic values that React can't optimize away at build time
+  const protocol = window['location']['protocol'];
+  const hostname = window['location']['hostname'];
+  const apiUrl = `${protocol}//${hostname}:5001`;
+  console.log('Auth: Dynamic API URL detected:', apiUrl);
+  return apiUrl;
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -24,7 +35,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/check`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/check`, {
         method: 'GET',
         credentials: 'include', // Include cookies
         headers: {
@@ -53,7 +64,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -72,13 +83,14 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: data.error };
       }
     } catch (error) {
+      console.error('Login request error:', error);
       return { success: false, error: 'Network error' };
     }
   };
 
   const register = async (username, email, password, role = 'user') => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const response = await fetch(`${getApiBaseUrl()}/auth/register`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -102,7 +114,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
+      await fetch(`${getApiBaseUrl()}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });

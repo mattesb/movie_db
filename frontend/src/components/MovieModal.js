@@ -13,7 +13,16 @@ function MovieModal({ movie, onClose, onDelete, onUpdate }) {
   useEffect(() => {
     const fetchEnhancedData = async () => {
       try {
-        const API_BASE_URL = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5001`;
+        // Dynamic API URL detection
+        const getApiBaseUrl = () => {
+          if (process.env.REACT_APP_API_URL) {
+            return process.env.REACT_APP_API_URL;
+          }
+          const protocol = window['location']['protocol'];
+          const hostname = window['location']['hostname'];
+          return `${protocol}//${hostname}:5001`;
+        };
+        const API_BASE_URL = getApiBaseUrl();
         const response = await fetch(`${API_BASE_URL}/movies/${movie.id}/enhanced`);
         if (response.ok) {
           const data = await response.json();
