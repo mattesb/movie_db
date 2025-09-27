@@ -6,10 +6,16 @@ from functools import wraps
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, session
+from flask import Flask, jsonify, request
 from flask_bcrypt import Bcrypt
-from flask_cors import CORS
-from flask_login import LoginManager, UserMixin, current_user, login_required, login_user, logout_user
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
@@ -33,22 +39,22 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login'
+login_manager.login_view = "login"
 
 
 # Global CORS handler
 @app.after_request
 def after_request(response):
     # Allow any origin for external access
-    origin = request.headers.get('Origin')
+    origin = request.headers.get("Origin")
     if origin:
-        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers["Access-Control-Allow-Origin"] = origin
     else:
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers["Access-Control-Allow-Origin"] = "*"
 
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     return response
 
 
@@ -57,13 +63,13 @@ def add_cors_headers(response, origin=None):
     """Add CORS headers to response"""
     # Allow any origin for external access
     if origin:
-        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers["Access-Control-Allow-Origin"] = origin
     else:
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers["Access-Control-Allow-Origin"] = "*"
 
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     return response
 
 
@@ -73,12 +79,12 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(60), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='user')  # 'user' or 'admin'
+    role = db.Column(db.String(20), nullable=False, default="user")  # 'user' or 'admin'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
 
     def set_password(self, password):
-        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+        self.password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password_hash, password)
@@ -88,12 +94,12 @@ class User(db.Model, UserMixin):
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'username': self.username,
-            'email': self.email,
-            'role': self.role,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'is_active': self.is_active
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "role": self.role,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "is_active": self.is_active,
         }
 
 
@@ -109,9 +115,11 @@ def role_required(role):
         @login_required
         def decorated_function(*args, **kwargs):
             if not current_user.has_role(role):
-                return jsonify({'error': 'Insufficient permissions'}), 403
+                return jsonify({"error": "Insufficient permissions"}), 403
             return f(*args, **kwargs)
+
         return decorated_function
+
     return decorator
 
 
@@ -120,8 +128,9 @@ def auth_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated:
-            return jsonify({'error': 'Authentication required'}), 401
+            return jsonify({"error": "Authentication required"}), 401
         return f(*args, **kwargs)
+
     return decorated_function
 
 
@@ -543,93 +552,92 @@ def search_movie_by_imdb_id(imdb_id):
 @app.route("/auth/register", methods=["POST", "OPTIONS"])
 def register():
     # Handle preflight request
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
         response = jsonify()
-        return add_cors_headers(response, request.headers.get('Origin'))
+        return add_cors_headers(response, request.headers.get("Origin"))
 
     data = request.json
-    if not data or not data.get('username') or not data.get('email') or not data.get('password'):
-        response = jsonify({'error': 'Missing required fields'})
-        return add_cors_headers(response, request.headers.get('Origin')), 400
+    if (
+        not data
+        or not data.get("username")
+        or not data.get("email")
+        or not data.get("password")
+    ):
+        response = jsonify({"error": "Missing required fields"})
+        return add_cors_headers(response, request.headers.get("Origin")), 400
 
     # Check if user already exists
-    if User.query.filter_by(username=data['username']).first():
-        response = jsonify({'error': 'Username already exists'})
-        return add_cors_headers(response, request.headers.get('Origin')), 409
-    if User.query.filter_by(email=data['email']).first():
-        response = jsonify({'error': 'Email already exists'})
-        return add_cors_headers(response, request.headers.get('Origin')), 409
+    if User.query.filter_by(username=data["username"]).first():
+        response = jsonify({"error": "Username already exists"})
+        return add_cors_headers(response, request.headers.get("Origin")), 409
+    if User.query.filter_by(email=data["email"]).first():
+        response = jsonify({"error": "Email already exists"})
+        return add_cors_headers(response, request.headers.get("Origin")), 409
 
     # Create new user
     user = User(
-        username=data['username'],
-        email=data['email'],
-        role=data.get('role', 'user')  # Default to 'user' role
+        username=data["username"],
+        email=data["email"],
+        role=data.get("role", "user"),  # Default to 'user' role
     )
-    user.set_password(data['password'])
+    user.set_password(data["password"])
 
     db.session.add(user)
     db.session.commit()
 
-    response = jsonify({'message': 'User created successfully', 'user': user.to_dict()})
-    return add_cors_headers(response, request.headers.get('Origin')), 201
+    response = jsonify({"message": "User created successfully", "user": user.to_dict()})
+    return add_cors_headers(response, request.headers.get("Origin")), 201
 
 
 @app.route("/auth/login", methods=["POST", "OPTIONS"])
 def login():
     # Handle preflight request
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
         response = jsonify()
-        return add_cors_headers(response, request.headers.get('Origin'))
+        return add_cors_headers(response, request.headers.get("Origin"))
 
     data = request.json
-    if not data or not data.get('username') or not data.get('password'):
-        response = jsonify({'error': 'Username and password required'})
-        return add_cors_headers(response, request.headers.get('Origin')), 400
+    if not data or not data.get("username") or not data.get("password"):
+        response = jsonify({"error": "Username and password required"})
+        return add_cors_headers(response, request.headers.get("Origin")), 400
 
-    user = User.query.filter_by(username=data['username']).first()
+    user = User.query.filter_by(username=data["username"]).first()
 
-    if user and user.check_password(data['password']) and user.is_active:
+    if user and user.check_password(data["password"]) and user.is_active:
         login_user(user, remember=True)
-        response = jsonify({
-            'message': 'Login successful',
-            'user': user.to_dict()
-        })
-        return add_cors_headers(response, request.headers.get('Origin')), 200
+        response = jsonify({"message": "Login successful", "user": user.to_dict()})
+        return add_cors_headers(response, request.headers.get("Origin")), 200
     else:
-        response = jsonify({'error': 'Invalid credentials'})
-        return add_cors_headers(response, request.headers.get('Origin')), 401
+        response = jsonify({"error": "Invalid credentials"})
+        return add_cors_headers(response, request.headers.get("Origin")), 401
 
 
 @app.route("/auth/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()
-    return jsonify({'message': 'Logout successful'}), 200
+    return jsonify({"message": "Logout successful"}), 200
 
 
 @app.route("/auth/user", methods=["GET"])
 @login_required
 def get_current_user():
-    return jsonify({'user': current_user.to_dict()}), 200
+    return jsonify({"user": current_user.to_dict()}), 200
 
 
 @app.route("/auth/check", methods=["GET", "OPTIONS"])
 def check_auth():
     # Handle preflight request
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
         response = jsonify()
-        return add_cors_headers(response, request.headers.get('Origin'))
+        return add_cors_headers(response, request.headers.get("Origin"))
 
     if current_user.is_authenticated:
-        response = jsonify({
-            'authenticated': True,
-            'user': current_user.to_dict()
-        })
-        return add_cors_headers(response, request.headers.get('Origin')), 200
+        response = jsonify({"authenticated": True, "user": current_user.to_dict()})
+        return add_cors_headers(response, request.headers.get("Origin")), 200
     else:
-        response = jsonify({'authenticated': False})
-        return add_cors_headers(response, request.headers.get('Origin')), 200
+        response = jsonify({"authenticated": False})
+        return add_cors_headers(response, request.headers.get("Origin")), 200
 
 
 # Movie routes (now with authentication)
@@ -642,8 +650,8 @@ def movies():
         return jsonify([m.to_dict() for m in movies])
     if request.method == "POST":
         # Only admins can manually add movies
-        if not current_user.has_role('admin'):
-            return jsonify({'error': 'Admin role required to add movies'}), 403
+        if not current_user.has_role("admin"):
+            return jsonify({"error": "Admin role required to add movies"}), 403
         data = request.json
         # Handle sources field conversion
         if "sources" in data and isinstance(data["sources"], list):
@@ -663,8 +671,8 @@ def movie_detail(movie_id):
         return jsonify(movie.to_dict())
     if request.method == "PUT":
         # Only admins can update movie details
-        if not current_user.has_role('admin'):
-            return jsonify({'error': 'Admin role required to update movies'}), 403
+        if not current_user.has_role("admin"):
+            return jsonify({"error": "Admin role required to update movies"}), 403
         for key, value in request.json.items():
             # Handle sources field conversion
             if key == "sources" and isinstance(value, list):
@@ -674,15 +682,15 @@ def movie_detail(movie_id):
         return jsonify(movie.to_dict())
     if request.method == "DELETE":
         # Only admins can delete movies
-        if not current_user.has_role('admin'):
-            return jsonify({'error': 'Admin role required to delete movies'}), 403
+        if not current_user.has_role("admin"):
+            return jsonify({"error": "Admin role required to delete movies"}), 403
         db.session.delete(movie)
         db.session.commit()
         return jsonify({"message": "deleted"})
 
 
 @app.route("/movies/search", methods=["GET"])
-@role_required('admin')
+@role_required("admin")
 def search_movie():
     title = request.args.get("title")
     movie_sources = request.args.getlist(
@@ -761,7 +769,7 @@ def get_enhanced_movie_details(movie_id):
 
 
 @app.route("/movies/search/imdb", methods=["GET"])
-@role_required('admin')
+@role_required("admin")
 def search_movie_by_imdb():
     """Search and add movie by IMDB ID"""
     imdb_id = request.args.get("imdb_id")
@@ -915,34 +923,26 @@ def init_demo_users():
         db.create_all()
 
         # Check if admin user already exists
-        admin_user = User.query.filter_by(username='admin').first()
+        admin_user = User.query.filter_by(username="admin").first()
         if not admin_user:
             # Create admin user
-            admin_user = User(
-                username='admin',
-                email='admin@example.com',
-                role='admin'
-            )
-            admin_user.set_password('admin')
+            admin_user = User(username="admin", email="admin@example.com", role="admin")
+            admin_user.set_password("admin")
             db.session.add(admin_user)
 
         # Check if demo user already exists
-        demo_user = User.query.filter_by(username='user').first()
+        demo_user = User.query.filter_by(username="user").first()
         if not demo_user:
             # Create demo user
-            demo_user = User(
-                username='user',
-                email='user@example.com',
-                role='user'
-            )
-            demo_user.set_password('user')
+            demo_user = User(username="user", email="user@example.com", role="user")
+            demo_user.set_password("user")
             db.session.add(demo_user)
 
         # Commit changes
         db.session.commit()
-        return jsonify({'message': 'Demo users initialized successfully'}), 200
+        return jsonify({"message": "Demo users initialized successfully"}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

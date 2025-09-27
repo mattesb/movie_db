@@ -23,7 +23,12 @@ function MovieModal({ movie, onClose, onDelete, onUpdate }) {
           return `${protocol}//${hostname}:5001`;
         };
         const API_BASE_URL = getApiBaseUrl();
-        const response = await fetch(`${API_BASE_URL}/movies/${movie.id}/enhanced`);
+        const response = await fetch(`${API_BASE_URL}/movies/${movie.id}/enhanced`, {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
         if (response.ok) {
           const data = await response.json();
           // Extract TMDB data from the movie object
